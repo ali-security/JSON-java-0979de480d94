@@ -117,4 +117,35 @@ public class Util {
             );
         }
     }
+
+    /**
+     * Runs the given body on a dedicated thread with a large (8MB) stack and
+     * returns whatever it threw, or null when it completed normally. Tests that
+     * parse documents nested up to the default maximum nesting depth use this,
+     * because the test JVM may be run with a small stack (for example -Xss512k)
+     * that cannot hold that many recursive parser frames on the main thread.
+     * @param body the code to run
+     * @return the Throwable raised by body, or null if it completed normally
+     */
+    public static Throwable throwableFromLargeStack(final Runnable body) {
+        final Throwable[] thrown = new Throwable[1];
+        Thread worker = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    body.run();
+                } catch (Throwable t) {
+                    thrown[0] = t;
+                }
+            }
+        }, "large-stack-test", 8L * 1024L * 1024L);
+        worker.start();
+        try {
+            worker.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for the large-stack test thread", e);
+        }
+        return thrown[0];
+    }
 }
